@@ -1,0 +1,33 @@
+﻿@model IEnumerable<StudentManagementSystem.Controllers.CourseViewModel>
+
+@{
+    ViewData["Title"] = "Courses";
+}
+
+<div class="container mt-4">
+    <h2 class="text-primary">Courses List</h2>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Student Count</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var course in Model)
+                {
+                    <tr>
+                        <td>@course.Id</td>
+                        <td>@course.Title</td>
+                        <td>
+                            <span class="badge bg-primary">@course.StudentCount Students</span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
