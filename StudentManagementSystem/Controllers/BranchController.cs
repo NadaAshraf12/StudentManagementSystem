@@ -1,31 +1,29 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using StudentManagementSystem.Context;
+using StudentManagementSystem.Interfaces;
 using StudentManagementSystem.Models;
 
 namespace StudentManagementSystem.Controllers
 {
     public class BranchController : Controller
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IBranchRepository _branchRepository;
 
-        public BranchController(ApplicationDbContext context)
+        public BranchController(IBranchRepository branchRepository)
         {
-            _context = context;
+            _branchRepository = branchRepository;
         }
 
         public async Task<IActionResult> Index()
         {
-            var branches = await _context.Branches
-                .Select(b => new BranchViewModel
-                {
-                    Id = b.Id,
-                    Title = b.Title,
-                    Location = b.Location
-                })
-                .ToListAsync();
+            var branches = await _branchRepository.GetAllAsync();
+            var viewModel = branches.Select(b => new BranchViewModel
+            {
+                Id = b.Id,
+                Title = b.Title,
+                Location = b.Location
+            });
 
-            return View(branches);
+            return View(viewModel);
         }
 
         public async Task<IActionResult> Details(int? id)
@@ -35,9 +33,7 @@ namespace StudentManagementSystem.Controllers
                 return NotFound();
             }
 
-            var branch = await _context.Branches
-                .FirstOrDefaultAsync(m => m.Id == id);
-
+            var branch = await _branchRepository.GetByIdAsync(id.Value);
             if (branch == null)
             {
                 return NotFound();
@@ -70,8 +66,7 @@ namespace StudentManagementSystem.Controllers
                     Location = viewModel.Location
                 };
 
-                _context.Add(branch);
-                await _context.SaveChangesAsync();
+                await _branchRepository.AddAsync(branch);
                 TempData["SuccessMessage"] = "Branch created successfully!";
                 return RedirectToAction(nameof(Index));
             }
@@ -85,7 +80,7 @@ namespace StudentManagementSystem.Controllers
                 return NotFound();
             }
 
-            var branch = await _context.Branches.FindAsync(id);
+            var branch = await _branchRepository.GetByIdAsync(id.Value);
             if (branch == null)
             {
                 return NotFound();
@@ -114,7 +109,7 @@ namespace StudentManagementSystem.Controllers
             {
                 try
                 {
-                    var branch = await _context.Branches.FindAsync(id);
+                    var branch = await _branchRepository.GetByIdAsync(id);
                     if (branch == null)
                     {
                         return NotFound();
@@ -123,13 +118,12 @@ namespace StudentManagementSystem.Controllers
                     branch.Title = viewModel.Title;
                     branch.Location = viewModel.Location;
 
-                    _context.Update(branch);
-                    await _context.SaveChangesAsync();
+                    await _branchRepository.UpdateAsync(branch);
                     TempData["SuccessMessage"] = "Branch updated successfully!";
                 }
-                catch (DbUpdateConcurrencyException)
+                catch (Exception)
                 {
-                    if (!BranchExists(viewModel.Id))
+                    if (!await _branchRepository.ExistsAsync(viewModel.Id))
                     {
                         return NotFound();
                     }
@@ -150,18 +144,15 @@ namespace StudentManagementSystem.Controllers
                 return NotFound();
             }
 
-            var branch = await _context.Branches
-                .Include(b => b.Students) 
-                .FirstOrDefaultAsync(m => m.Id == id);
-
+            var branch = await _branchRepository.GetByIdAsync(id.Value);
             if (branch == null)
             {
                 return NotFound();
             }
 
-            if (branch.Students.Any())
+            if (await _branchRepository.HasStudentsAsync(id.Value))
             {
-                ViewBag.ErrorMessage = $"Cannot delete branch '{branch.Title}' because it has {branch.Students.Count} student(s). Please delete or move the students first.";
+                ViewBag.ErrorMessage = $"Cannot delete branch '{branch.Title}' because it has students. Please delete or move the students first.";
             }
 
             var viewModel = new BranchViewModel
@@ -178,30 +169,21 @@ namespace StudentManagementSystem.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var branch = await _context.Branches
-                .Include(b => b.Students) 
-                .FirstOrDefaultAsync(b => b.Id == id);
-
+            var branch = await _branchRepository.GetByIdAsync(id);
             if (branch == null)
             {
                 return NotFound();
             }
 
-            if (branch.Students.Any())
+            if (await _branchRepository.HasStudentsAsync(id))
             {
-                TempData["ErrorMessage"] = $"Cannot delete branch '{branch.Title}' because it has {branch.Students.Count} student(s). Please delete or move the students first.";
+                TempData["ErrorMessage"] = $"Cannot delete branch '{branch.Title}' because it has students. Please delete or move the students first.";
                 return RedirectToAction(nameof(Index));
             }
 
-            _context.Branches.Remove(branch);
-            await _context.SaveChangesAsync();
+            await _branchRepository.DeleteAsync(id);
             TempData["SuccessMessage"] = "Branch deleted successfully!";
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool BranchExists(int id)
-        {
-            return _context.Branches.Any(e => e.Id == id);
         }
     }
 
