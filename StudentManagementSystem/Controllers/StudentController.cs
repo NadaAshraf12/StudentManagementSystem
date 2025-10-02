@@ -1,55 +1,48 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
-using StudentManagementSystem.Context;
 using StudentManagementSystem.Models;
+using StudentManagementSystem.Services;
 
 namespace StudentManagementSystem.Controllers
 {
     public class StudentController : Controller
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IStudentService _studentService;
+        private readonly IBranchService _branchService;
+        private readonly ICourseService _courseService;
 
-        public StudentController(ApplicationDbContext context)
+        public StudentController(
+            IStudentService studentService,
+            IBranchService branchService,
+            ICourseService courseService)
         {
-            _context = context;
+            _studentService = studentService;
+            _branchService = branchService;
+            _courseService = courseService;
         }
 
         public async Task<IActionResult> Index()
         {
-            var students = await _context.Students
-                .Include(s => s.Branch)
-                .Include(s => s.Course)
-                .Select(s => new StudentViewModel
-                {
-                    Id = s.Id,
-                    Name = s.Name,
-                    Address = s.Address,
-                    CreatedAt = s.CreatedAt,
-                    BranchName = s.Branch != null ? s.Branch.Title : "N/A",
-                    CourseName = s.Course != null ? s.Course.Title : "N/A"
-                })
-                .ToListAsync();
+            var students = await _studentService.GetAllStudentsAsync();
+            var viewModel = students.Select(s => new StudentViewModel
+            {
+                Id = s.Id,
+                Name = s.Name,
+                Address = s.Address,
+                CreatedAt = s.CreatedAt,
+                BranchName = s.Branch?.Title ?? "N/A",
+                CourseName = s.Course?.Title ?? "N/A"
+            });
 
-            return View(students);
+            return View(viewModel);
         }
 
         public async Task<IActionResult> Details(int? id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var student = await _context.Students
-                .Include(s => s.Branch)
-                .Include(s => s.Course)
-                .FirstOrDefaultAsync(m => m.Id == id);
-
-            if (student == null)
-            {
-                return NotFound();
-            }
+            var student = await _studentService.GetStudentByIdAsync(id.Value);
+            if (student == null) return NotFound();
 
             var viewModel = new StudentViewModel
             {
@@ -57,8 +50,8 @@ namespace StudentManagementSystem.Controllers
                 Name = student.Name,
                 Address = student.Address,
                 CreatedAt = student.CreatedAt,
-                BranchName = student.Branch != null ? student.Branch.Title : "N/A",
-                CourseName = student.Course != null ? student.Course.Title : "N/A",
+                BranchName = student.Branch?.Title ?? "N/A",
+                CourseName = student.Course?.Title ?? "N/A",
                 BranchId = student.BranchId,
                 CourseId = student.CourseId
             };
@@ -88,8 +81,7 @@ namespace StudentManagementSystem.Controllers
                     CourseId = viewModel.CourseId
                 };
 
-                _context.Add(student);
-                await _context.SaveChangesAsync();
+                await _studentService.CreateStudentAsync(student);
                 TempData["SuccessMessage"] = "Student created successfully!";
                 return RedirectToAction(nameof(Index));
             }
@@ -100,16 +92,10 @@ namespace StudentManagementSystem.Controllers
 
         public async Task<IActionResult> Edit(int? id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var student = await _context.Students.FindAsync(id);
-            if (student == null)
-            {
-                return NotFound();
-            }
+            var student = await _studentService.GetStudentByIdAsync(id.Value);
+            if (student == null) return NotFound();
 
             var viewModel = new StudentViewModel
             {
@@ -128,40 +114,26 @@ namespace StudentManagementSystem.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(int id, StudentViewModel viewModel)
         {
-            if (id != viewModel.Id)
-            {
-                return NotFound();
-            }
+            if (id != viewModel.Id) return NotFound();
 
             if (ModelState.IsValid)
             {
                 try
                 {
-                    var student = await _context.Students.FindAsync(id);
-                    if (student == null)
-                    {
-                        return NotFound();
-                    }
+                    var student = await _studentService.GetStudentByIdAsync(id);
+                    if (student == null) return NotFound();
 
                     student.Name = viewModel.Name;
                     student.Address = viewModel.Address;
                     student.BranchId = viewModel.BranchId;
                     student.CourseId = viewModel.CourseId;
 
-                    _context.Update(student);
-                    await _context.SaveChangesAsync();
+                    await _studentService.UpdateStudentAsync(student);
                     TempData["SuccessMessage"] = "Student updated successfully!";
                 }
-                catch (DbUpdateConcurrencyException)
+                catch (Exception)
                 {
-                    if (!StudentExists(viewModel.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    throw;
                 }
                 return RedirectToAction(nameof(Index));
             }
@@ -172,20 +144,10 @@ namespace StudentManagementSystem.Controllers
 
         public async Task<IActionResult> Delete(int? id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
-            var student = await _context.Students
-                .Include(s => s.Branch)
-                .Include(s => s.Course)
-                .FirstOrDefaultAsync(m => m.Id == id);
-
-            if (student == null)
-            {
-                return NotFound();
-            }
+            var student = await _studentService.GetStudentByIdAsync(id.Value);
+            if (student == null) return NotFound();
 
             var viewModel = new StudentViewModel
             {
@@ -193,8 +155,8 @@ namespace StudentManagementSystem.Controllers
                 Name = student.Name,
                 Address = student.Address,
                 CreatedAt = student.CreatedAt,
-                BranchName = student.Branch != null ? student.Branch.Title : "N/A",
-                CourseName = student.Course != null ? student.Course.Title : "N/A"
+                BranchName = student.Branch?.Title ?? "N/A",
+                CourseName = student.Course?.Title ?? "N/A"
             };
 
             return View(viewModel);
@@ -204,33 +166,21 @@ namespace StudentManagementSystem.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var student = await _context.Students.FindAsync(id);
-            if (student != null)
-            {
-                _context.Students.Remove(student);
-                await _context.SaveChangesAsync();
-                TempData["SuccessMessage"] = "Student deleted successfully!";
-            }
-
+            await _studentService.DeleteStudentAsync(id);
+            TempData["SuccessMessage"] = "Student deleted successfully!";
             return RedirectToAction(nameof(Index));
-        }
-
-        private bool StudentExists(int id)
-        {
-            return _context.Students.Any(e => e.Id == id);
         }
 
         private async Task PopulateViewBags()
         {
-            var branches = await _context.Branches.ToListAsync();
+            var branches = await _branchService.GetAllBranchesAsync();
             ViewBag.Branches = new SelectList(branches, "Id", "Title");
 
-            var courses = await _context.Courses.ToListAsync();
+            var courses = await _courseService.GetAllCoursesAsync();
             ViewBag.Courses = new SelectList(courses, "Id", "Title");
         }
     }
-
-    public class StudentViewModel
+public class StudentViewModel
     {
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
