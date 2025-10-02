@@ -218,7 +218,7 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 ## 👥 Authors
 
-- Your Name - [GitHub Profile](https://github.com/yourusername)
+-NadaAshraf12  - [GitHub Profile](https://github.com/NadaAshraf12)
 
 ## 🙏 Acknowledgments
 
